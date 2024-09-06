@@ -3,36 +3,35 @@ import os
 
 # Function to read either Excel or CSV files
 def read_file(file_path):
-    if file_path.endswith('.xlsx') or file_path.endswith('.xls'):
-        return pd.read_excel(file_path, header=5)  # For Excel files
-    elif file_path.endswith('.csv'):
-        return pd.read_csv(file_path, header=5)  # For CSV files
+    if file_path.endswith('.csv'):
+        return pd.read_csv(file_path, header=5), pd.read_csv(file_path, header=None).iloc[2, 0] # For CSV files
     else:
         raise ValueError("Unsupported file format")
 
 # Function to process each input file and update the consolidated DataFrame
 def process_file(file_path, consolidated_df):
     # Read the file (CSV or Excel)
-    df = read_file(file_path)
-    
-    # Extract the event name from cell A3 if it's an Excel file or from the first cell if CSV
-    if file_path.endswith('.xlsx') or file_path.endswith('.xls'):
-        event_name = pd.read_excel(file_path, header=None).iloc[2, 0]
-    elif file_path.endswith('.csv'):
-        event_name = pd.read_csv(file_path, header=None).iloc[2, 0]
+    df, event_name = read_file(file_path)
     
     # Concatenate First Name and Last Name to create a full name
-    df['Full Name'] = df['First Name'] + ' ' + df['Last Name']
+    df['Full Name'] = str(df['First Name']) + ' ' + str(df['Last Name'])
 
     # Select relevant columns
-    df = df[['Full Name', 'Campus Email', 'Card ID']].copy()
+    df = df[['Full Name', 'Campus Email', 'Card ID Number']].copy()
     
     # Add a column for the event attendance, marking everyone as present (1)
     df[event_name] = 1
 
-    # Merge with the consolidated DataFrame
-    consolidated_df = pd.merge(consolidated_df, df, on=['Full Name', 'Campus Email', 'Card ID'], how='outer')
+    # Ensure the columns used for merging have consistent data types
+    df['Full Name'] = df['Full Name'].astype(str)
+    df['Campus Email'] = df['Campus Email'].astype(str)
+    df['Card ID Number'] = df['Card ID Number'].astype(str)
 
+    # Merge with the consolidated DataFrame
+    consolidated_df = pd.merge(consolidated_df, df, on=['Full Name', 'Campus Email', 'Card ID Number'], how='outer')
+
+    if event_name not in consolidated_df.columns:
+        consolidated_df[event_name] = 0
     # Fill NaN values with 0 (indicating absence)
     consolidated_df[event_name] = consolidated_df[event_name].fillna(0).astype(int)
 
@@ -41,11 +40,11 @@ def process_file(file_path, consolidated_df):
 # Main function to consolidate all input files
 def consolidate_attendance(input_folder, output_file):
     # Initialize an empty DataFrame with the necessary columns
-    consolidated_df = pd.DataFrame(columns=['Full Name', 'Campus Email', 'Card ID'])
+    consolidated_df = pd.DataFrame(columns=['Full Name', 'Campus Email', 'Card ID Number'])
 
     # Process each file in the input folder
     for file_name in os.listdir(input_folder):
-        if file_name.endswith(('.xlsx', '.xls', '.csv')):  # Check for Excel and CSV files
+        if file_name.endswith('.csv'):  # Check for Excel and CSV files
             file_path = os.path.join(input_folder, file_name)
             consolidated_df = process_file(file_path, consolidated_df)
     
